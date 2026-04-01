@@ -1,0 +1,955 @@
+import { useState, useEffect, useRef } from “react”;
+import { motion, AnimatePresence } from “framer-motion”;
+
+// ─── Constants ──────────────────────────────────────────────────────────────
+const CATEGORIES = [
+{ id: “gaming”,    label: “Gaming”,       icon: “🎮”, accent: “#8b5cf6” },
+{ id: “finance”,   label: “Finance”,      icon: “💰”, accent: “#10b981” },
+{ id: “tech”,      label: “Tech”,         icon: “💻”, accent: “#3b82f6” },
+{ id: “vlogs”,     label: “Vlogs”,        icon: “🎥”, accent: “#f43f5e” },
+{ id: “food”,      label: “Food”,         icon: “🍕”, accent: “#f97316” },
+{ id: “music”,     label: “Music”,        icon: “🎵”, accent: “#eab308” },
+{ id: “fitness”,   label: “Fitness”,      icon: “🏋️”, accent: “#14b8a6” },
+{ id: “education”, label: “Education”,    icon: “📚”, accent: “#6366f1” },
+];
+
+const SECTIONS_META = [
+{ key: “dialogue”, icon: “🎤”, label: “Main Dialogue”,    accent: “#d4a853” },
+{ key: “broll”,    icon: “🎬”, label: “B-Roll & Visuals”, accent: “#4c6ef5” },
+{ key: “audio”,    icon: “🔊”, label: “Audio & SFX”,      accent: “#10b981” },
+{ key: “onscreen”, icon: “✍️”, label: “On-Screen Text”,  accent: “#f43f5e” },
+];
+
+const LOADING_TEXTS = [
+“Analyzing your niche…”,
+“Crafting the perfect hook…”,
+“Writing your dialogue…”,
+“Designing B-roll sequences…”,
+“Layering audio cues…”,
+“Polishing your script…”,
+];
+
+const FAQS = [
+“What does ScriptCraft do?”,
+“Can I use this for Shorts?”,
+“What categories are supported?”,
+“How do I use the editing guide?”,
+];
+
+// ─── Utilities ───────────────────────────────────────────────────────────────
+function hexToRgb(hex) {
+const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+return r ? `${parseInt(r[1],16)}, ${parseInt(r[2],16)}, ${parseInt(r[3],16)}` : “255,255,255”;
+}
+
+// ─── Orbital Loading Animation ───────────────────────────────────────────────
+function LoadingOrb() {
+const COLORS = [”#d4a853”, “#4c6ef5”, “#f43f5e”];
+return (
+<div style={{ position: “relative”, width: 44, height: 44, flexShrink: 0 }}>
+<motion.div
+style={{
+position: “absolute”, top: “50%”, left: “50%”,
+width: 8, height: 8, borderRadius: “50%”,
+background: “#d4a853”, marginTop: -4, marginLeft: -4,
+}}
+animate={{ scale: [1, 1.5, 1], opacity: [0.7, 1, 0.7] }}
+transition={{ duration: 1.4, repeat: Infinity, ease: “easeInOut” }}
+/>
+{[0, 1, 2].map(i => (
+<motion.div
+key={i}
+style={{
+position: “absolute”, top: “50%”, left: “50%”,
+width: 38 - i * 6, height: 38 - i * 6,
+marginTop: -(19 - i * 3), marginLeft: -(19 - i * 3),
+borderRadius: “50%”,
+}}
+animate={{ rotate: i % 2 === 0 ? 360 : -360 }}
+transition={{ duration: 1.6 + i * 0.4, repeat: Infinity, ease: “linear” }}
+>
+<div style={{
+position: “absolute”, top: -3, left: “50%”,
+width: 6 - i, height: 6 - i,
+marginLeft: -(3 - i / 2),
+borderRadius: “50%”,
+background: COLORS[i],
+boxShadow: `0 0 8px ${COLORS[i]}`,
+}} />
+</motion.div>
+))}
+</div>
+);
+}
+
+// ─── Section Card ─────────────────────────────────────────────────────────────
+function SectionCard({ meta, content }) {
+if (!content) return null;
+return (
+<div style={{
+padding: “1rem 1.1rem”,
+borderRadius: 12,
+background: `rgba(${hexToRgb(meta.accent)}, 0.05)`,
+border: `1px solid rgba(${hexToRgb(meta.accent)}, 0.14)`,
+borderLeft: `3px solid ${meta.accent}`,
+}}>
+<div style={{ display: “flex”, alignItems: “center”, gap: 7, marginBottom: 8 }}>
+<span style={{ fontSize: 13 }}>{meta.icon}</span>
+<span style={{
+fontSize: “0.66rem”, fontWeight: 700, color: meta.accent,
+textTransform: “uppercase”, letterSpacing: “0.1em”,
+fontFamily: “Syne, sans-serif”,
+}}>{meta.label}</span>
+</div>
+<p style={{ color: “rgba(232,232,240,0.75)”, fontSize: “0.84rem”, lineHeight: 1.75, margin: 0 }}>
+{content}
+</p>
+</div>
+);
+}
+
+// ─── Floating Chatbot ─────────────────────────────────────────────────────────
+function ChatBot({ messages, onSend, loading, faqs }) {
+const [isOpen, setIsOpen] = useState(false);
+const [input, setInput]   = useState(””);
+const endRef = useRef(null);
+
+useEffect(() => {
+if (isOpen) endRef.current?.scrollIntoView({ behavior: “smooth” });
+}, [messages, isOpen]);
+
+const handleSend = (msg) => {
+const text = msg || input.trim();
+if (!text) return;
+setInput(””);
+onSend(text);
+};
+
+return (
+<div style={{ position: “fixed”, bottom: 24, right: 24, zIndex: 1000, display: “flex”, flexDirection: “column”, alignItems: “flex-end” }}>
+<AnimatePresence>
+{isOpen && (
+<motion.div
+initial={{ opacity: 0, scale: 0.88, y: 24 }}
+animate={{ opacity: 1, scale: 1, y: 0 }}
+exit={{ opacity: 0, scale: 0.88, y: 24 }}
+transition={{ type: “spring”, damping: 26, stiffness: 320 }}
+style={{
+width: 340, height: 490, marginBottom: 14,
+borderRadius: 22,
+background: “rgba(10, 11, 20, 0.96)”,
+border: “1px solid rgba(255,255,255,0.09)”,
+backdropFilter: “blur(24px)”,
+boxShadow: “0 30px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)”,
+display: “flex”, flexDirection: “column”, overflow: “hidden”,
+}}
+>
+{/* Header */}
+<div style={{
+padding: “1rem 1.25rem”,
+borderBottom: “1px solid rgba(255,255,255,0.06)”,
+display: “flex”, alignItems: “center”, gap: 10,
+background: “rgba(255,255,255,0.02)”,
+}}>
+<div style={{
+width: 34, height: 34, borderRadius: “50%”,
+background: “linear-gradient(135deg, #d4a853, #4c6ef5)”,
+display: “flex”, alignItems: “center”, justifyContent: “center”,
+fontSize: 15, flexShrink: 0,
+}}>✨</div>
+<div style={{ flex: 1 }}>
+<p style={{ fontFamily: “Syne, sans-serif”, fontWeight: 700, fontSize: “0.85rem”, color: “#fff”, margin: 0 }}>Script Assistant</p>
+<div style={{ display: “flex”, alignItems: “center”, gap: 5, marginTop: 2 }}>
+<motion.div
+style={{ width: 5, height: 5, borderRadius: “50%”, background: “#10b981” }}
+animate={{ opacity: [1, 0.4, 1] }}
+transition={{ duration: 2, repeat: Infinity }}
+/>
+<span style={{ fontSize: “0.68rem”, color: “#10b981” }}>Always online</span>
+</div>
+</div>
+<button
+onClick={() => setIsOpen(false)}
+style={{ background: “none”, border: “none”, cursor: “pointer”, color: “rgba(255,255,255,0.3)”, fontSize: 18, lineHeight: 1 }}
+>×</button>
+</div>
+
+```
+        {/* Messages */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "1rem", display: "flex", flexDirection: "column", gap: 10 }}>
+          {messages.map((msg, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+              style={{ alignSelf: msg.role === "user" ? "flex-end" : "flex-start", maxWidth: "88%" }}
+            >
+              <div style={{
+                padding: "0.6rem 0.95rem",
+                borderRadius: msg.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                background: msg.role === "user"
+                  ? "linear-gradient(135deg, #d4a853, #bf9335)"
+                  : "rgba(255,255,255,0.06)",
+                border: msg.role === "user" ? "none" : "1px solid rgba(255,255,255,0.07)",
+                color: msg.role === "user" ? "#0a0b14" : "rgba(232,232,240,0.85)",
+                fontSize: "0.81rem", lineHeight: 1.55,
+                fontWeight: msg.role === "user" ? 600 : 400,
+              }}>
+                {msg.content}
+              </div>
+            </motion.div>
+          ))}
+          {loading && (
+            <div style={{ alignSelf: "flex-start" }}>
+              <div style={{
+                padding: "0.65rem 1rem", borderRadius: "16px 16px 16px 4px",
+                background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.07)",
+                display: "flex", gap: 5, alignItems: "center",
+              }}>
+                {[0,1,2].map(i => (
+                  <motion.div
+                    key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: "#d4a853" }}
+                    animate={{ opacity: [0.2, 1, 0.2], y: [0, -3, 0] }}
+                    transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.2 }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          <div ref={endRef} />
+        </div>
+
+        {/* FAQ chips */}
+        {messages.length <= 1 && (
+          <div style={{ padding: "0 1rem 0.75rem", display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {faqs.map(q => (
+              <motion.button
+                key={q}
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => handleSend(q)}
+                style={{
+                  padding: "0.32rem 0.72rem", borderRadius: 20,
+                  background: "rgba(212,168,83,0.08)",
+                  border: "1px solid rgba(212,168,83,0.22)",
+                  color: "#d4a853", fontSize: "0.7rem", cursor: "pointer",
+                  fontFamily: "Plus Jakarta Sans, sans-serif",
+                }}
+              >{q}</motion.button>
+            ))}
+          </div>
+        )}
+
+        {/* Input */}
+        <div style={{
+          padding: "0.75rem 1rem", borderTop: "1px solid rgba(255,255,255,0.06)",
+          display: "flex", gap: 8, alignItems: "center",
+          background: "rgba(255,255,255,0.01)",
+        }}>
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleSend()}
+            placeholder="Ask anything about ScriptCraft..."
+            style={{
+              flex: 1, background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.09)",
+              borderRadius: 10, padding: "0.5rem 0.8rem",
+              color: "#e8e8f0", fontSize: "0.81rem",
+              outline: "none", fontFamily: "Plus Jakarta Sans, sans-serif",
+            }}
+          />
+          <motion.button
+            whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.94 }}
+            onClick={() => handleSend()}
+            style={{
+              width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+              background: "linear-gradient(135deg, #d4a853, #bf9335)",
+              border: "none", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 16, color: "#0a0b14", fontWeight: 700,
+            }}
+          >→</motion.button>
+        </div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+
+  {/* Bubble */}
+  <motion.button
+    onClick={() => setIsOpen(o => !o)}
+    whileHover={{ scale: 1.1 }}
+    whileTap={{ scale: 0.92 }}
+    style={{
+      width: 56, height: 56, borderRadius: "50%",
+      background: "linear-gradient(135deg, #d4a853 0%, #4c6ef5 100%)",
+      border: "none", cursor: "pointer",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: 22,
+      boxShadow: "0 8px 32px rgba(212,168,83,0.45), 0 0 0 1px rgba(255,255,255,0.08)",
+    }}
+  >
+    <AnimatePresence mode="wait">
+      <motion.span
+        key={isOpen ? "x" : "chat"}
+        initial={{ rotate: -90, opacity: 0, scale: 0.5 }}
+        animate={{ rotate: 0, opacity: 1, scale: 1 }}
+        exit={{ rotate: 90, opacity: 0, scale: 0.5 }}
+        transition={{ duration: 0.18 }}
+        style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
+      >
+        {isOpen ? "✕" : "💬"}
+      </motion.span>
+    </AnimatePresence>
+  </motion.button>
+</div>
+```
+
+);
+}
+
+// ─── Floating Particles (Hero decoration) ─────────────────────────────────────
+function Particles() {
+const dots = Array.from({ length: 18 }, (_, i) => ({
+id: i,
+x: Math.random() * 100,
+y: Math.random() * 100,
+size: Math.random() * 2 + 1,
+dur: Math.random() * 8 + 6,
+delay: Math.random() * 4,
+}));
+return (
+<div style={{ position: “absolute”, inset: 0, pointerEvents: “none”, overflow: “hidden” }}>
+{dots.map(d => (
+<motion.div
+key={d.id}
+style={{
+position: “absolute”,
+left: `${d.x}%`, top: `${d.y}%`,
+width: d.size, height: d.size,
+borderRadius: “50%”,
+background: d.id % 3 === 0 ? “#d4a853” : d.id % 3 === 1 ? “#4c6ef5” : “rgba(255,255,255,0.3)”,
+}}
+animate={{ y: [0, -20, 0], opacity: [0.15, 0.6, 0.15] }}
+transition={{ duration: d.dur, repeat: Infinity, delay: d.delay, ease: “easeInOut” }}
+/>
+))}
+</div>
+);
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+export default function App() {
+const [selectedCat, setSelectedCat]     = useState(null);
+const [videoStyle, setVideoStyle]       = useState(“longform”);
+const [isGenerating, setIsGenerating]   = useState(false);
+const [loadingIdx, setLoadingIdx]       = useState(0);
+const [script, setScript]               = useState(null);
+const [error, setError]                 = useState(null);
+const [chatMessages, setChatMessages]   = useState([
+{ role: “assistant”, content: “Hey! I’m your script assistant. Ask me anything about ScriptCraft 👋” }
+]);
+const [chatLoading, setChatLoading]     = useState(false);
+const outputRef = useRef(null);
+
+// cycle loading text
+useEffect(() => {
+if (!isGenerating) return;
+setLoadingIdx(0);
+const iv = setInterval(() => setLoadingIdx(i => (i + 1) % LOADING_TEXTS.length), 1600);
+return () => clearInterval(iv);
+}, [isGenerating]);
+
+const generateScript = async () => {
+if (!selectedCat || isGenerating) return;
+setIsGenerating(true);
+setScript(null);
+setError(null);
+
+```
+const cat       = CATEGORIES.find(c => c.id === selectedCat);
+const styleLabel = videoStyle === "short"
+  ? "YouTube Short (under 60 seconds, punchy and fast)"
+  : "Long-form YouTube video (5–8 minutes, well-structured)";
+
+try {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1000,
+      system: "You are an elite YouTube content strategist and script writer. Return ONLY valid JSON — no markdown fences, no explanation, no preamble.",
+      messages: [{
+        role: "user",
+        content: `Generate a production-ready script + editing guide for a ${styleLabel} in the ${cat.label} niche.
+```
+
+Return exactly this JSON structure:
+{
+“title”: “Catchy, viral-worthy video title”,
+“totalDuration”: “X min”,
+“hook”: “The first 5-second attention-grabbing spoken line”,
+“sections”: [
+{
+“name”: “Section Name”,
+“timeRange”: “0:00 – 0:45”,
+“dialogue”: “Full narration/dialogue. Be specific, engaging, and natural. 3–5 sentences.”,
+“broll”: “Detailed B-roll shots and visual direction. What’s on screen?”,
+“audio”: “Background music vibe, BPM, specific SFX to use, transitions”,
+“onscreen”: “Text overlays, lower thirds, captions, motion graphics, timing”
+}
+],
+“outro”: “Closing call-to-action line for the viewer”
+}
+
+Generate ${videoStyle === “short” ? “2” : “4”} sections. Be highly specific, creative, and production-ready. Make it genuinely viral-worthy for the ${cat.label} audience.`,
+}],
+}),
+});
+
+```
+  const data  = await res.json();
+  const raw   = data.content?.map(b => b.text || "").join("") || "";
+  const clean = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  const parsed = JSON.parse(clean);
+  setScript(parsed);
+  setTimeout(() => outputRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 400);
+} catch {
+  setError("Generation failed — please try again.");
+} finally {
+  setIsGenerating(false);
+}
+```
+
+};
+
+const sendChat = async (msg) => {
+if (!msg.trim() || chatLoading) return;
+const history = […chatMessages, { role: “user”, content: msg }];
+setChatMessages(history);
+setChatLoading(true);
+try {
+const res = await fetch(“https://api.anthropic.com/v1/messages”, {
+method: “POST”,
+headers: { “Content-Type”: “application/json” },
+body: JSON.stringify({
+model: “claude-sonnet-4-20250514”,
+max_tokens: 1000,
+system: “You are a helpful assistant for ScriptCraft — a free AI tool that generates YouTube scripts and editing guides. Keep replies under 3 sentences. Categories: Gaming, Finance, Tech, Vlogs, Food, Music, Fitness, Education. Modes: Long-form and Short/Reels.”,
+messages: history.slice(1),
+}),
+});
+const data  = await res.json();
+const reply = data.content?.map(b => b.text || “”).join(””) || “Sorry, I couldn’t get that.”;
+setChatMessages(prev => […prev, { role: “assistant”, content: reply }]);
+} catch {
+setChatMessages(prev => […prev, { role: “assistant”, content: “Something went wrong. Please try again!” }]);
+} finally {
+setChatLoading(false);
+}
+};
+
+const cat = CATEGORIES.find(c => c.id === selectedCat);
+
+return (
+<div style={{ fontFamily: “‘Plus Jakarta Sans’, sans-serif”, background: “#07080f”, minHeight: “100vh”, color: “#e2e2ef”, overflowX: “hidden” }}>
+<style>{`@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap'); *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; } ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; } input::placeholder { color: rgba(255,255,255,0.25); } button { font-family: inherit; }`}</style>
+
+```
+  {/* ── Mesh background ── */}
+  <div style={{
+    position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0,
+    background: `
+      radial-gradient(ellipse 70% 50% at 5% 10%, rgba(76,110,245,0.13) 0%, transparent 100%),
+      radial-gradient(ellipse 60% 45% at 95% 90%, rgba(212,168,83,0.1) 0%, transparent 100%),
+      radial-gradient(ellipse 45% 35% at 50% 110%, rgba(139,92,246,0.08) 0%, transparent 100%),
+      radial-gradient(ellipse 30% 25% at 80% 10%, rgba(244,63,94,0.06) 0%, transparent 100%)
+    `,
+  }} />
+
+  <div style={{ position: "relative", zIndex: 1 }}>
+
+    {/* ══════════════════════════════════════
+        HERO
+    ══════════════════════════════════════ */}
+    <section style={{
+      minHeight: "92vh", display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center",
+      padding: "8rem 2rem 4rem", textAlign: "center",
+      position: "relative", overflow: "hidden",
+    }}>
+      <Particles />
+
+      {/* Top label */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 8,
+          padding: "0.38rem 1rem", borderRadius: 20,
+          background: "rgba(212,168,83,0.07)",
+          border: "1px solid rgba(212,168,83,0.2)",
+          marginBottom: "2.5rem",
+        }}
+      >
+        <motion.div
+          style={{ width: 6, height: 6, borderRadius: "50%", background: "#d4a853" }}
+          animate={{ opacity: [1, 0.3, 1] }}
+          transition={{ duration: 2, repeat: Infinity }}
+        />
+        <span style={{ fontSize: "0.73rem", color: "#d4a853", fontWeight: 600, letterSpacing: "0.06em", fontFamily: "Syne, sans-serif" }}>
+          AI-Powered · Free · Instant
+        </span>
+      </motion.div>
+
+      {/* Headline */}
+      <motion.h1
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+        style={{
+          fontFamily: "Syne, sans-serif",
+          fontSize: "clamp(3.2rem, 9vw, 7rem)",
+          fontWeight: 800, lineHeight: 1.03,
+          letterSpacing: "-0.035em",
+          marginBottom: "1.5rem",
+        }}
+      >
+        <span style={{ color: "#fff", display: "block" }}>Your Script.</span>
+        <span style={{
+          background: "linear-gradient(135deg, #d4a853 0%, #f0c975 45%, #c9943a 100%)",
+          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+          backgroundClip: "text", display: "block",
+        }}>Your Vision.</span>
+      </motion.h1>
+
+      {/* Sub */}
+      <motion.p
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.7, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
+        style={{
+          fontSize: "clamp(0.95rem, 2.2vw, 1.18rem)",
+          color: "rgba(255,255,255,0.4)",
+          maxWidth: 520, margin: "0 auto 3.5rem",
+          lineHeight: 1.75, fontWeight: 400,
+        }}
+      >
+        Generate complete YouTube scripts with professional editing guides — B-roll direction, SFX cues, and on-screen text — in seconds.
+      </motion.p>
+
+      {/* Stats row */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.4 }}
+        style={{ display: "flex", gap: "2.5rem", flexWrap: "wrap", justifyContent: "center", marginBottom: "4rem" }}
+      >
+        {[
+          { val: "8+", label: "Categories" },
+          { val: "4", label: "Edit Layers" },
+          { val: "∞", label: "Scripts" },
+        ].map(s => (
+          <div key={s.label} style={{ textAlign: "center" }}>
+            <p style={{ fontFamily: "Syne, sans-serif", fontWeight: 800, fontSize: "1.8rem", color: "#d4a853", lineHeight: 1 }}>{s.val}</p>
+            <p style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.3)", marginTop: 4, letterSpacing: "0.07em", textTransform: "uppercase" }}>{s.label}</p>
+          </div>
+        ))}
+      </motion.div>
+
+      {/* Scroll cue */}
+      <motion.div
+        animate={{ y: [0, 9, 0] }}
+        transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+        style={{ color: "rgba(255,255,255,0.15)", fontSize: "1.3rem" }}
+      >↓</motion.div>
+    </section>
+
+    {/* ══════════════════════════════════════
+        GENERATOR INTERFACE
+    ══════════════════════════════════════ */}
+    <section style={{ maxWidth: 920, margin: "0 auto", padding: "2rem 1.5rem 5rem" }}>
+
+      {/* ── Step 01: Category ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.6 }}
+        style={{ marginBottom: "3rem" }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "1.4rem" }}>
+          <span style={{
+            padding: "0.22rem 0.6rem", borderRadius: 6,
+            background: "rgba(212,168,83,0.08)", border: "1px solid rgba(212,168,83,0.2)",
+            fontSize: "0.65rem", color: "#d4a853", fontWeight: 700,
+            fontFamily: "Syne, sans-serif", letterSpacing: "0.1em",
+          }}>01</span>
+          <p style={{
+            fontFamily: "Syne, sans-serif", fontSize: "0.72rem", fontWeight: 700,
+            color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.12em",
+          }}>Select your category</p>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 }}>
+          {CATEGORIES.map((c, i) => {
+            const sel = selectedCat === c.id;
+            return (
+              <motion.button
+                key={c.id}
+                initial={{ opacity: 0, y: 12 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.05, duration: 0.4 }}
+                whileHover={{ y: -3, scale: 1.02 }}
+                whileTap={{ scale: 0.96 }}
+                onClick={() => setSelectedCat(sel ? null : c.id)}
+                style={{
+                  padding: "1.1rem 1rem", borderRadius: 14,
+                  border: `1.5px solid ${sel ? c.accent : "rgba(255,255,255,0.07)"}`,
+                  background: sel ? `rgba(${hexToRgb(c.accent)}, 0.11)` : "rgba(255,255,255,0.025)",
+                  cursor: "pointer", textAlign: "left",
+                  boxShadow: sel ? `0 0 24px rgba(${hexToRgb(c.accent)}, 0.18)` : "none",
+                  transition: "border-color 0.2s, background 0.2s, box-shadow 0.2s",
+                }}
+              >
+                <span style={{ fontSize: 26, display: "block", marginBottom: 10 }}>{c.icon}</span>
+                <span style={{
+                  fontSize: "0.82rem", fontWeight: 700,
+                  color: sel ? c.accent : "rgba(255,255,255,0.65)",
+                  fontFamily: "Syne, sans-serif", transition: "color 0.2s",
+                }}>{c.label}</span>
+              </motion.button>
+            );
+          })}
+        </div>
+      </motion.div>
+
+      {/* ── Step 02: Style ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.6, delay: 0.1 }}
+        style={{ marginBottom: "3rem" }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "1.2rem" }}>
+          <span style={{
+            padding: "0.22rem 0.6rem", borderRadius: 6,
+            background: "rgba(212,168,83,0.08)", border: "1px solid rgba(212,168,83,0.2)",
+            fontSize: "0.65rem", color: "#d4a853", fontWeight: 700,
+            fontFamily: "Syne, sans-serif", letterSpacing: "0.1em",
+          }}>02</span>
+          <p style={{
+            fontFamily: "Syne, sans-serif", fontSize: "0.72rem", fontWeight: 700,
+            color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.12em",
+          }}>Choose video style</p>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {[
+            { id: "longform", label: "Long-form", sub: "5–8 minutes", icon: "📺" },
+            { id: "short",    label: "Short / Reel", sub: "Under 60 sec", icon: "⚡" },
+          ].map(st => {
+            const active = videoStyle === st.id;
+            return (
+              <motion.button
+                key={st.id}
+                whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                onClick={() => setVideoStyle(st.id)}
+                style={{
+                  padding: "0.85rem 1.5rem", borderRadius: 12, cursor: "pointer",
+                  border: `1.5px solid ${active ? "#d4a853" : "rgba(255,255,255,0.07)"}`,
+                  background: active ? "rgba(212,168,83,0.09)" : "rgba(255,255,255,0.025)",
+                  display: "flex", alignItems: "center", gap: 10,
+                  transition: "all 0.2s",
+                }}
+              >
+                <span style={{ fontSize: 20 }}>{st.icon}</span>
+                <div style={{ textAlign: "left" }}>
+                  <p style={{ fontFamily: "Syne, sans-serif", fontWeight: 700, fontSize: "0.85rem", color: active ? "#d4a853" : "rgba(255,255,255,0.7)", margin: 0 }}>{st.label}</p>
+                  <p style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.28)", margin: "2px 0 0" }}>{st.sub}</p>
+                </div>
+              </motion.button>
+            );
+          })}
+        </div>
+      </motion.div>
+
+      {/* ── Generate Button ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.6, delay: 0.2 }}
+      >
+        <motion.button
+          onClick={generateScript}
+          disabled={!selectedCat || isGenerating}
+          whileHover={selectedCat && !isGenerating ? { scale: 1.015, y: -2 } : {}}
+          whileTap={selectedCat && !isGenerating ? { scale: 0.985 } : {}}
+          style={{
+            width: "100%", padding: "1.4rem 2rem", borderRadius: 18, border: "none",
+            background: selectedCat
+              ? "linear-gradient(135deg, #d4a853 0%, #c49236 50%, #d4a853 100%)"
+              : "rgba(255,255,255,0.04)",
+            backgroundSize: "200% 200%",
+            cursor: selectedCat && !isGenerating ? "pointer" : "not-allowed",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 18,
+            boxShadow: selectedCat && !isGenerating ? "0 10px 50px rgba(212,168,83,0.35)" : "none",
+            opacity: !selectedCat ? 0.45 : 1,
+            transition: "all 0.3s",
+          }}
+        >
+          {isGenerating ? (
+            <>
+              <LoadingOrb />
+              <div style={{ textAlign: "left" }}>
+                <p style={{ fontFamily: "Syne, sans-serif", fontWeight: 800, fontSize: "1rem", color: "#07080f", margin: 0 }}>Generating Script...</p>
+                <motion.p
+                  key={loadingIdx}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  style={{ fontSize: "0.73rem", color: "rgba(7,8,15,0.6)", margin: "2px 0 0" }}
+                >
+                  {LOADING_TEXTS[loadingIdx]}
+                </motion.p>
+              </div>
+            </>
+          ) : (
+            <>
+              <span style={{ fontSize: 22 }}>✨</span>
+              <span style={{
+                fontFamily: "Syne, sans-serif", fontWeight: 800, fontSize: "1.05rem",
+                color: selectedCat ? "#07080f" : "rgba(255,255,255,0.25)",
+              }}>
+                {selectedCat ? `Generate ${cat?.label} Script` : "Select a Category First"}
+              </span>
+            </>
+          )}
+        </motion.button>
+
+        <AnimatePresence>
+          {error && (
+            <motion.p
+              initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              style={{ color: "#f43f5e", fontSize: "0.8rem", textAlign: "center", marginTop: 14 }}
+            >{error}</motion.p>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </section>
+
+    {/* ══════════════════════════════════════
+        OUTPUT — SCRIPT & GUIDE
+    ══════════════════════════════════════ */}
+    <AnimatePresence>
+      {script && (
+        <motion.section
+          ref={outputRef}
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
+          style={{ maxWidth: 920, margin: "0 auto", padding: "0 1.5rem 8rem" }}
+        >
+          {/* Divider label */}
+          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: "2rem" }}>
+            <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.06)" }} />
+            <span style={{
+              fontFamily: "Syne, sans-serif", fontSize: "0.68rem", fontWeight: 700,
+              color: "rgba(255,255,255,0.25)", textTransform: "uppercase", letterSpacing: "0.14em",
+            }}>Generated Script</span>
+            <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.06)" }} />
+          </div>
+
+          {/* Title card */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            style={{
+              padding: "2.25rem", borderRadius: 22,
+              background: "rgba(255,255,255,0.025)",
+              border: "1px solid rgba(255,255,255,0.07)",
+              marginBottom: "1.75rem",
+            }}
+          >
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: "1.25rem" }}>
+              <span style={{
+                padding: "0.28rem 0.75rem", borderRadius: 8,
+                background: cat ? `rgba(${hexToRgb(cat.accent)}, 0.12)` : "transparent",
+                border: `1px solid ${cat ? `rgba(${hexToRgb(cat.accent)}, 0.28)` : "transparent"}`,
+                fontSize: "0.7rem", color: cat?.accent, fontWeight: 700,
+                fontFamily: "Syne, sans-serif",
+              }}>{cat?.icon} {cat?.label}</span>
+              <span style={{
+                padding: "0.28rem 0.75rem", borderRadius: 8,
+                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)",
+                fontSize: "0.7rem", color: "rgba(255,255,255,0.45)",
+              }}>⏱ {script.totalDuration}</span>
+              <span style={{
+                padding: "0.28rem 0.75rem", borderRadius: 8,
+                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)",
+                fontSize: "0.7rem", color: "rgba(255,255,255,0.45)",
+              }}>{videoStyle === "short" ? "⚡ Short / Reel" : "📺 Long-form"}</span>
+            </div>
+
+            <h2 style={{
+              fontFamily: "Syne, sans-serif", fontWeight: 800, lineHeight: 1.18,
+              fontSize: "clamp(1.4rem, 3.5vw, 2.2rem)",
+              color: "#fff", marginBottom: "1.5rem",
+            }}>{script.title}</h2>
+
+            {/* Hook */}
+            <div style={{
+              padding: "1.1rem 1.3rem", borderRadius: 14,
+              background: "rgba(212,168,83,0.07)",
+              border: "1px solid rgba(212,168,83,0.18)",
+              borderLeft: "3px solid #d4a853",
+            }}>
+              <p style={{
+                fontSize: "0.65rem", fontWeight: 700, color: "#d4a853",
+                textTransform: "uppercase", letterSpacing: "0.12em",
+                marginBottom: 8, fontFamily: "Syne, sans-serif",
+              }}>⚡ Opening Hook — 0:00 to 0:05</p>
+              <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.95rem", fontStyle: "italic", lineHeight: 1.7, margin: 0 }}>
+                "{script.hook}"
+              </p>
+            </div>
+          </motion.div>
+
+          {/* Sections timeline */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+            {script.sections?.map((sec, idx) => (
+              <motion.div
+                key={idx}
+                initial={{ opacity: 0, x: -16 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: idx * 0.12 + 0.25, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                style={{ display: "grid", gridTemplateColumns: "48px 1fr", gap: "1rem", alignItems: "start" }}
+              >
+                {/* Timeline marker */}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
+                    background: "rgba(212,168,83,0.08)",
+                    border: "1.5px solid rgba(212,168,83,0.28)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontFamily: "Syne, sans-serif", fontWeight: 800,
+                    fontSize: "0.8rem", color: "#d4a853",
+                  }}>{String(idx + 1).padStart(2, "0")}</div>
+                  {idx < (script.sections.length - 1) && (
+                    <motion.div
+                      initial={{ scaleY: 0 }}
+                      animate={{ scaleY: 1 }}
+                      transition={{ delay: idx * 0.12 + 0.5, duration: 0.4 }}
+                      style={{
+                        width: 1, flex: 1, minHeight: 48,
+                        background: "linear-gradient(to bottom, rgba(212,168,83,0.2), rgba(255,255,255,0.04))",
+                        marginTop: 8, transformOrigin: "top",
+                      }}
+                    />
+                  )}
+                </div>
+
+                {/* Section body */}
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "1rem", flexWrap: "wrap" }}>
+                    <h3 style={{ fontFamily: "Syne, sans-serif", fontWeight: 700, fontSize: "0.98rem", color: "#fff", margin: 0 }}>
+                      {sec.name}
+                    </h3>
+                    <span style={{
+                      padding: "0.18rem 0.6rem", borderRadius: 6,
+                      background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+                      fontSize: "0.68rem", color: "rgba(255,255,255,0.3)",
+                    }}>{sec.timeRange}</span>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 10 }}>
+                    {SECTIONS_META.map(meta => (
+                      <SectionCard key={meta.key} meta={meta} content={sec[meta.key]} />
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Outro */}
+          {script.outro && (
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7 }}
+              style={{
+                marginTop: "2rem", padding: "1.4rem 1.6rem", borderRadius: 16,
+                background: "rgba(76,110,245,0.06)",
+                border: "1px solid rgba(76,110,245,0.15)",
+                borderLeft: "3px solid #4c6ef5",
+              }}
+            >
+              <p style={{
+                fontSize: "0.65rem", fontWeight: 700, color: "#4c6ef5",
+                textTransform: "uppercase", letterSpacing: "0.12em",
+                marginBottom: 8, fontFamily: "Syne, sans-serif",
+              }}>🎬 Outro & Call-to-Action</p>
+              <p style={{ color: "rgba(255,255,255,0.82)", fontSize: "0.9rem", lineHeight: 1.7, margin: 0 }}>
+                {script.outro}
+              </p>
+            </motion.div>
+          )}
+
+          {/* Generate another */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.9 }}
+            style={{ marginTop: "2.5rem", textAlign: "center" }}
+          >
+            <motion.button
+              whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
+              onClick={() => { setScript(null); setSelectedCat(null); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+              style={{
+                padding: "0.75rem 2rem", borderRadius: 12, cursor: "pointer",
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "rgba(255,255,255,0.55)", fontSize: "0.85rem",
+                fontFamily: "Syne, sans-serif", fontWeight: 600,
+                transition: "all 0.2s",
+              }}
+            >↑ Generate a New Script</motion.button>
+          </motion.div>
+        </motion.section>
+      )}
+    </AnimatePresence>
+
+    {/* ── Footer ── */}
+    <footer style={{
+      textAlign: "center", padding: "3rem 2rem",
+      borderTop: "1px solid rgba(255,255,255,0.04)",
+    }}>
+      <p style={{
+        fontFamily: "Syne, sans-serif",
+        color: "rgba(255,255,255,0.18)", fontSize: "0.78rem", letterSpacing: "0.04em",
+      }}>
+        ScriptCraft — Built for creators who mean business
+      </p>
+    </footer>
+  </div>
+
+  {/* ── Chatbot ── */}
+  <ChatBot
+    messages={chatMessages}
+    onSend={sendChat}
+    loading={chatLoading}
+    faqs={FAQS}
+  />
+</div>
+```
+
+);
+}
